@@ -18,5 +18,14 @@ func SetupRouter() *gin.Engine {
 		blogGroup.DELETE("/:id", handlers.DeleteBlog)
 	}
 
+	adminGroup := r.Group("/admins")
+	{
+		adminGroup.POST("/", handlers.CreateAdmin)
+		adminGroup.GET("/", handlers.GetAdmins)
+		adminGroup.GET("/:id", handlers.GetAdmin)
+		adminGroup.PUT("/:id", handlers.UpdateAdmin)
+		adminGroup.DELETE("/:id", handlers.DeleteAdmin)
+	}
+
 	return r
 }
