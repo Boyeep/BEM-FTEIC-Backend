@@ -12,6 +12,7 @@ func SetupRouter() *gin.Engine {
 	blogGroup := r.Group("/blogs")
 	{
 		blogGroup.POST("/", handlers.CreateBlog)
+		blogGroup.POST("/upload-image", handlers.UploadBlogImage) // New endpoint for content images
 		blogGroup.GET("/", handlers.GetBlogs)
 		blogGroup.GET("/:id", handlers.GetBlog)
 		blogGroup.PUT("/:id", handlers.UpdateBlog)

@@ -6,8 +6,9 @@ import (
 
 type Blog struct {
 	gorm.Model
-	ImagePath   string `json:"image_path"`
-	Description string `json:"description"`
+	Title       string `json:"title"`
+	Description string `json:"description" gorm:"type:text"`
+	AdminID     uint   `json:"admin_id"`
 	AuthorName  string `json:"author_name"`
 	AuthorPhoto string `json:"author_photo"`
 }

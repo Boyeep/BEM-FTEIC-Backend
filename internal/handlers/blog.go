@@ -4,36 +4,48 @@ import (
 	"net/http"
 	"repo-backend/internal/database"
 	"repo-backend/internal/models"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 // CreateBlog creates a new blog post with image upload
 func CreateBlog(c *gin.Context) {
-	// Parse multipart form
-	authorName := c.PostForm("author_name")
+	// Parse form
+	title := c.PostForm("title")
 	description := c.PostForm("description")
-	authorPhoto := c.PostForm("author_photo") // Assuming this is also a string/url for now, or another upload
 
-	// Handle Image Upload
-	file, err := c.FormFile("image")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Image is required"})
-		return
+	adminIDStr := c.PostForm("admin_id")
+	var adminID uint
+	if adminIDStr != "" {
+		if id, err := strconv.ParseUint(adminIDStr, 10, 32); err == nil {
+			adminID = uint(id)
+		}
 	}
 
-	// Save the file to specific destination
-	filePath := "uploads/" + file.Filename
-	if err := c.SaveUploadedFile(file, filePath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
-		return
+	var authorName string
+	var authorPhoto string
+
+	// Ambil info Admin (Wajib ada AdminID untuk mengisi penulis)
+	if adminID != 0 {
+		var admin models.Admin
+		if err := database.DB.First(&admin, adminID).Error; err == nil {
+			authorName = admin.Nama
+
+			// TODO: Uncomment jika Admin sudah punya ProfilePhoto
+			/*
+				authorPhoto = admin.ProfilePhoto
+			*/
+		}
 	}
 
 	blog := models.Blog{
+		Title:       title,
 		AuthorName:  authorName,
 		Description: description,
 		AuthorPhoto: authorPhoto,
-		ImagePath:   filePath,
+		AdminID:     adminID,
 	}
 
 	result := database.DB.Create(&blog)
@@ -87,6 +99,30 @@ func UpdateBlog(c *gin.Context) {
 
 	database.DB.Model(&blog).Updates(updateData)
 	c.JSON(http.StatusOK, blog)
+}
+
+// UploadBlogImage handles image uploads for blog content (WYSIWYG editor)
+func UploadBlogImage(c *gin.Context) {
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Image is required"})
+		return
+	}
+
+	// Create unique filename to prevent overwrite
+	filename := strconv.FormatInt(time.Now().UnixNano(), 10) + "_" + file.Filename
+	filePath := "uploads/" + filename
+
+	if err := c.SaveUploadedFile(file, filePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
+		return
+	}
+
+	// Return URL that can be used in <img> tag
+	// Adjust base URL as needed (e.g., http://localhost:8080/)
+	c.JSON(http.StatusOK, gin.H{
+		"url": filePath,
+	})
 }
 
 // DeleteBlog deletes a blog post by ID
