@@ -27,5 +27,7 @@ func ConnectDB() {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
+	DB.AutoMigrate(&models.Gallery{})
+
 	log.Println("Connected to PostgreSQL database")
 }

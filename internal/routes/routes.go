@@ -28,5 +28,14 @@ func SetupRouter() *gin.Engine {
 		adminGroup.DELETE("/:id", handlers.DeleteAdmin)
 	}
 
+	galleryGroup := r.Group("/gallery")
+	{
+		galleryGroup.POST("/", handlers.CreateGallery)
+		galleryGroup.GET("/", handlers.GetGalleries)
+		galleryGroup.GET("/:id", handlers.GetGalleryByID)
+		galleryGroup.PUT("/:id", handlers.UpdateGallery)
+		galleryGroup.DELETE("/:id", handlers.DeleteGallery)
+	}
+
 	return r
 }
