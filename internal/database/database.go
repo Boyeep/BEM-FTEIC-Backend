@@ -28,6 +28,7 @@ func ConnectDB() {
 	}
 
 	DB.AutoMigrate(&models.Gallery{})
+	DB.AutoMigrate(&models.Event{})
 
 	log.Println("Connected to PostgreSQL database")
 }
