@@ -27,6 +27,7 @@ func ConnectDB() {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
+	DB.AutoMigrate(&models.Blog{})
 	DB.AutoMigrate(&models.Gallery{})
 	DB.AutoMigrate(&models.Event{})
 
