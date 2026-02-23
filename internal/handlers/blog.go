@@ -40,8 +40,22 @@ func CreateBlog(c *gin.Context) {
 		}
 	}
 
+	// Handle upload thumbnail
+	var thumbnailPath string
+	file, err := c.FormFile("thumbnail")
+	if err == nil {
+		filename := strconv.FormatInt(time.Now().UnixNano(), 10) + "_" + file.Filename
+		filePath := "uploads/" + filename
+		if err := c.SaveUploadedFile(file, filePath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan thumbnail"})
+			return
+		}
+		thumbnailPath = filePath
+	}
+
 	blog := models.Blog{
 		Title:       title,
+		Thumbnail:   thumbnailPath,
 		AuthorName:  authorName,
 		Description: description,
 		AuthorPhoto: authorPhoto,
@@ -91,13 +105,30 @@ func UpdateBlog(c *gin.Context) {
 		return
 	}
 
-	var updateData models.Blog
-	if err := c.ShouldBindJSON(&updateData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Update field teks jika ada
+	if title := c.PostForm("title"); title != "" {
+		blog.Title = title
+	}
+	if description := c.PostForm("description"); description != "" {
+		blog.Description = description
 	}
 
-	database.DB.Model(&blog).Updates(updateData)
+	// Update thumbnail jika ada file baru
+	file, err := c.FormFile("thumbnail")
+	if err == nil {
+		filename := strconv.FormatInt(time.Now().UnixNano(), 10) + "_" + file.Filename
+		filePath := "uploads/" + filename
+		if err := c.SaveUploadedFile(file, filePath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan thumbnail"})
+			return
+		}
+		blog.Thumbnail = filePath
+	}
+
+	if result := database.DB.Save(&blog); result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, blog)
 }
 
