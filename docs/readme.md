@@ -50,9 +50,9 @@ http://localhost:8080
 ## Get All Admin/Accounts
 ```
 GET http://localhost:8080/admins/
-
-![Alt text](image-5.png)
 ```
+![Alt text](image-5.png)
+
 
 ## Get Account by ID
 ```
@@ -214,6 +214,10 @@ go mod tidy
 Buat database MySQL dan sesuaikan konfigurasi di file config.
 
 ## Run Application
+
+```
+cd .\cmd\server\
+```
 
 ```
 go run main.go
