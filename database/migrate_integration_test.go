@@ -42,11 +42,28 @@ func TestMigratePostgreSQL(t *testing.T) {
 		LANGUAGE sql STABLE AS 'SELECT NULL::UUID';`).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Exec(`INSERT INTO auth.users (id,email,raw_user_meta_data)
+		VALUES ('55555555-5555-4555-8555-555555555555', 'stevenprobot@gmail.com',
+			'{"username":"Project Owner"}'::JSONB)
+		ON CONFLICT (id) DO UPDATE
+		SET email=EXCLUDED.email, raw_user_meta_data=EXCLUDED.raw_user_meta_data`).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := Migrate(db); err != nil {
 		t.Fatal(err)
 	}
 	if err := Migrate(db); err != nil {
 		t.Fatalf("migration must be idempotent: %v", err)
+	}
+	var ownerRole string
+	if err := db.Raw(
+		"SELECT role FROM profiles WHERE email = ?",
+		"stevenprobot@gmail.com",
+	).Scan(&ownerRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ownerRole != "admin" {
+		t.Fatalf("expected bootstrapped owner to be admin, got %q", ownerRole)
 	}
 	testVerticalRepositories(t, db)
 	var count int64
