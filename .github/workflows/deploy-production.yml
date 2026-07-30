@@ -42,7 +42,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Package source
-        run: tar --exclude=.git --exclude=.env --exclude=uploads -czf backend-source.tar.gz .
+        run: |
+          tar \
+            --exclude=.git \
+            --exclude=.env \
+            --exclude=uploads \
+            --exclude=backend-source.tar.gz \
+            -czf backend-source.tar.gz .
 
       - name: Upload source to VPS
         uses: appleboy/scp-action@v1.0.0
