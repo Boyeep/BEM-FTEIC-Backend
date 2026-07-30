@@ -108,30 +108,30 @@ jobs:
             }
 
             select_tag "$RELEASE_TAG"
-            sudo docker compose --env-file .deploy.env -p group1 config --quiet
+            sudo docker compose -p group1 --env-file .deploy.env config --quiet
 
             echo "Backing up upload volume..."
             select_tag "$PREVIOUS_TAG"
-            sudo docker compose --env-file .deploy.env -p group1 run --rm --user root \
+            sudo docker compose -p group1 --env-file .deploy.env run --rm --user root \
               backend sh -c 'tar -czf "/backups/uploads-$(date -u +%Y%m%dT%H%M%SZ).tar.gz" -C /app/uploads .'
             find "$APP_DIR/backups" -type f -name 'uploads-*.tar.gz' -mtime +14 -delete
 
             select_tag "$RELEASE_TAG"
-            sudo docker compose --env-file .deploy.env -p group1 build backend
+            sudo docker compose -p group1 --env-file .deploy.env build backend
 
             echo "Running database migrations..."
-            if ! sudo docker compose --env-file .deploy.env -p group1 run --rm backend /app/server --migrate; then
+            if ! sudo docker compose -p group1 --env-file .deploy.env run --rm backend /app/server --migrate; then
               echo "Migration failed; current release remains active."
               exit 1
             fi
 
-            sudo docker compose --env-file .deploy.env -p group1 up -d backend
+            sudo docker compose -p group1 --env-file .deploy.env up -d backend
 
             if ! curl --retry 15 --retry-delay 3 --retry-connrefused --retry-all-errors \
               --fail --silent --show-error http://127.0.0.1:8002/ready; then
               echo "Readiness failed; rolling back to $PREVIOUS_TAG..."
               select_tag "$PREVIOUS_TAG"
-              sudo docker compose --env-file .deploy.env -p group1 up -d backend
+              sudo docker compose -p group1 --env-file .deploy.env up -d backend
               curl --retry 10 --retry-delay 3 --retry-connrefused --retry-all-errors \
                 --fail --silent --show-error http://127.0.0.1:8002/ready
               exit 1
@@ -139,4 +139,4 @@ jobs:
 
             printf '%s\n' "$RELEASE_TAG" > .last-successful-image
             select_tag "$RELEASE_TAG"
-            sudo docker compose --env-file .deploy.env -p group1 ps backend
+            sudo docker compose -p group1 --env-file .deploy.env ps backend
