@@ -47,8 +47,8 @@ jobs:
             --exclude=.git \
             --exclude=.env \
             --exclude=uploads \
-            --exclude=backend-source.tar.gz \
-            -czf backend-source.tar.gz .
+            -czf "$RUNNER_TEMP/backend-source.tar.gz" .
+          mv "$RUNNER_TEMP/backend-source.tar.gz" backend-source.tar.gz
 
       - name: Upload source to VPS
         uses: appleboy/scp-action@v1.0.0
