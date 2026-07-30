@@ -60,7 +60,7 @@ func (r *postgresRepository) Create(ctx context.Context, item *models.Blog) erro
 	return r.db.WithContext(ctx).Create(item).Error
 }
 func (r *postgresRepository) Update(ctx context.Context, item *models.Blog) error {
-	return r.db.WithContext(ctx).Save(item).Error
+	return r.db.WithContext(ctx).Omit("AuthorProfile").Save(item).Error
 }
 func (r *postgresRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Delete(&models.Blog{}, "id = ?", id).Error
