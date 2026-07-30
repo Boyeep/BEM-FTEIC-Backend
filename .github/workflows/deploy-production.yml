@@ -103,32 +103,40 @@ jobs:
             RELEASE_TAG="${{ github.sha }}"
             PREVIOUS_TAG="$(cat .last-successful-image 2>/dev/null || echo latest)"
             mkdir -p backups
+            select_tag() {
+              printf 'BACKEND_IMAGE_TAG=%s\n' "$1" > .deploy.env
+            }
 
-            sudo env BACKEND_IMAGE_TAG="$RELEASE_TAG" docker compose -p group1 config --quiet
+            select_tag "$RELEASE_TAG"
+            sudo docker compose --env-file .deploy.env -p group1 config --quiet
 
             echo "Backing up upload volume..."
-            sudo env BACKEND_IMAGE_TAG="$PREVIOUS_TAG" docker compose -p group1 run --rm --user root \
+            select_tag "$PREVIOUS_TAG"
+            sudo docker compose --env-file .deploy.env -p group1 run --rm --user root \
               backend sh -c 'tar -czf "/backups/uploads-$(date -u +%Y%m%dT%H%M%SZ).tar.gz" -C /app/uploads .'
             find "$APP_DIR/backups" -type f -name 'uploads-*.tar.gz' -mtime +14 -delete
 
-            sudo env BACKEND_IMAGE_TAG="$RELEASE_TAG" docker compose -p group1 build backend
+            select_tag "$RELEASE_TAG"
+            sudo docker compose --env-file .deploy.env -p group1 build backend
 
             echo "Running database migrations..."
-            if ! sudo env BACKEND_IMAGE_TAG="$RELEASE_TAG" docker compose -p group1 run --rm backend /app/server --migrate; then
+            if ! sudo docker compose --env-file .deploy.env -p group1 run --rm backend /app/server --migrate; then
               echo "Migration failed; current release remains active."
               exit 1
             fi
 
-            sudo env BACKEND_IMAGE_TAG="$RELEASE_TAG" docker compose -p group1 up -d backend
+            sudo docker compose --env-file .deploy.env -p group1 up -d backend
 
             if ! curl --retry 15 --retry-delay 3 --retry-connrefused --retry-all-errors \
               --fail --silent --show-error http://127.0.0.1:8002/ready; then
               echo "Readiness failed; rolling back to $PREVIOUS_TAG..."
-              sudo env BACKEND_IMAGE_TAG="$PREVIOUS_TAG" docker compose -p group1 up -d backend
+              select_tag "$PREVIOUS_TAG"
+              sudo docker compose --env-file .deploy.env -p group1 up -d backend
               curl --retry 10 --retry-delay 3 --retry-connrefused --retry-all-errors \
                 --fail --silent --show-error http://127.0.0.1:8002/ready
               exit 1
             fi
 
             printf '%s\n' "$RELEASE_TAG" > .last-successful-image
-            sudo env BACKEND_IMAGE_TAG="$RELEASE_TAG" docker compose -p group1 ps backend
+            select_tag "$RELEASE_TAG"
+            sudo docker compose --env-file .deploy.env -p group1 ps backend
