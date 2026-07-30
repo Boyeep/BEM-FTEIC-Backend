@@ -63,4 +63,22 @@ func TestMigratePostgreSQL(t *testing.T) {
 	if supportTableCount != 2 {
 		t.Fatalf("expected support tables, got %d", supportTableCount)
 	}
+	var publicationColumnCount int64
+	if err := db.Raw(`SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema='public' AND table_name='events'
+		  AND column_name='publication_status'`).Scan(&publicationColumnCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if publicationColumnCount != 1 {
+		t.Fatalf("expected events.publication_status column, got %d", publicationColumnCount)
+	}
+	var eventPolicy string
+	if err := db.Raw(`SELECT qual FROM pg_policies
+		WHERE schemaname='public' AND tablename='events'
+		  AND policyname='events_public_read'`).Scan(&eventPolicy).Error; err != nil {
+		t.Fatal(err)
+	}
+	if eventPolicy == "" {
+		t.Fatal("expected published-only event policy")
+	}
 }

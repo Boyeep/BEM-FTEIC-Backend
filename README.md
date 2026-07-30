@@ -34,7 +34,7 @@ pkg/response/           format response standar
 
 - Verifikasi token Supabase dan authorization role `admin`
 - PostgreSQL RLS dan grant terbatas
-- DTO validation serta response/error terstandardisasi
+- DTO/query validation, pagination server-side, serta response/error terstandardisasi
 - Request ID, security headers, rate limiting, dan HTTP timeouts
 - Batas ukuran upload dan pemeriksaan MIME
 - Rollback deployment jika migration atau readiness gagal
@@ -89,6 +89,9 @@ GET /events/
 GET /events/:id
 GET /gallery/
 GET /gallery/:id
+GET /profiles?ids=<uuid,uuid>
+POST /visitors
+GET /visitors/count
 GET /uploads/:filename
 ```
 
@@ -129,9 +132,27 @@ Format response:
 }
 ```
 
+Endpoint list mengembalikan:
+
+```json
+{
+  "items": [],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total_items": 0,
+    "total_pages": 1,
+    "has_next_page": false,
+    "has_previous_page": false
+  }
+}
+```
+
+Blog menggunakan publication status `DRAFT | PUBLISHED | ARCHIVED`. Event memisahkan lifecycle `UPCOMING | ONGOING | ENDED` dari `publication_status` dengan nilai `DRAFT | PUBLISHED | ARCHIVED`.
+
 ## Database dan Migration
 
-`database/migrations` adalah sumber skema resmi. Migration mengelola tabel, role admin, signup whitelist, visitor analytics, Auth hook, profile trigger, grant, dan RLS.
+`database/migrations` adalah sumber skema resmi. Migration mengelola tabel, role admin, signup whitelist, visitor analytics, Auth hook, profile trigger, content contract, grant, dan RLS.
 
 Di Supabase Dashboard aktifkan Before User Created hook:
 

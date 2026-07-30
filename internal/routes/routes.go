@@ -6,6 +6,7 @@ import (
 
 	"repo-backend/config"
 	"repo-backend/internal/handlers"
+	"repo-backend/internal/media"
 	"repo-backend/internal/middleware"
 	"repo-backend/internal/repository"
 	"repo-backend/internal/service"
@@ -27,12 +28,24 @@ func SetupRouter(db *gorm.DB) (*gin.Engine, error) {
 	}
 
 	contents := repository.NewContentRepository(db)
+	mediaService := media.NewService(
+		media.NewLocalStorage("uploads"),
+		config.Optional("PUBLIC_API_URL", ""),
+	)
 	h := &handlers.Content{
-		Blogs:   service.NewBlog(contents),
-		Events:  service.NewEvent(repository.NewEventRepository(db)),
-		Gallery: service.NewGallery(repository.NewGalleryRepository(db)),
+		Blogs:   service.NewBlog(contents, mediaService),
+		Events:  service.NewEvent(repository.NewEventRepository(db), mediaService),
+		Gallery: service.NewGallery(repository.NewGalleryRepository(db), mediaService),
 	}
-	accounts := &handlers.Account{DB: db}
+	accounts := &handlers.Account{
+		Service: service.NewAccount(repository.NewAccountRepository(db)),
+	}
+	analytics := &handlers.Analytics{
+		Service: service.NewAnalytics(repository.NewAnalyticsRepository(db)),
+	}
+	mediaHandler := &handlers.Media{
+		Service: mediaService,
+	}
 
 	r := gin.New()
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "172.16.0.0/12"}); err != nil {
@@ -60,33 +73,37 @@ func SetupRouter(db *gorm.DB) (*gin.Engine, error) {
 	protected := []gin.HandlerFunc{auth, admin}
 	r.GET("/me", auth, accounts.Me)
 	r.PUT("/me", auth, accounts.UpdateMe)
+	r.GET("/profiles", accounts.PublicProfiles)
+	r.POST("/visitors", analytics.Track)
+	r.GET("/visitors/count", analytics.Count)
 
-	r.POST("/uploads/images", append(protected, handlers.UploadImage)...)
-	r.DELETE("/uploads/images", append(protected, handlers.DeleteImage)...)
+	registerMediaRoutes(r, mediaHandler, protected)
+	registerPublicContentRoutes(r, h)
+	registerAdminRoutes(r, h, accounts, protected)
+	return r, nil
+}
+
+func registerMediaRoutes(r *gin.Engine, handler *handlers.Media, protected []gin.HandlerFunc) {
+	r.POST("/uploads/images", append(protected, handler.UploadImage)...)
+	r.DELETE("/uploads/images", append(protected, handler.DeleteImage)...)
 	r.Static("/uploads", "./uploads")
+}
 
+func registerPublicContentRoutes(r *gin.Engine, handler *handlers.Content) {
 	blogs := r.Group("/blogs")
-	blogs.GET("/", h.ListBlogs)
-	blogs.GET("/:id", h.GetBlog)
-	blogs.POST("/", append(protected, h.CreateBlog)...)
-	blogs.POST("/upload-image", append(protected, handlers.UploadImage)...)
-	blogs.PUT("/:id", append(protected, h.UpdateBlog)...)
-	blogs.DELETE("/:id", append(protected, h.DeleteBlog)...)
+	blogs.GET("/", handler.ListBlogs)
+	blogs.GET("/:id", handler.GetBlog)
 
 	events := r.Group("/events")
-	events.GET("/", h.ListEvents)
-	events.GET("/:id", h.GetEvent)
-	events.POST("/", append(protected, h.CreateEvent)...)
-	events.PUT("/:id", append(protected, h.UpdateEvent)...)
-	events.DELETE("/:id", append(protected, h.DeleteEvent)...)
+	events.GET("/", handler.ListEvents)
+	events.GET("/:id", handler.GetEvent)
 
 	gallery := r.Group("/gallery")
-	gallery.GET("/", h.ListGallery)
-	gallery.GET("/:id", h.GetGallery)
-	gallery.POST("/", append(protected, h.CreateGallery)...)
-	gallery.PUT("/:id", append(protected, h.UpdateGallery)...)
-	gallery.DELETE("/:id", append(protected, h.DeleteGallery)...)
+	gallery.GET("/", handler.ListGallery)
+	gallery.GET("/:id", handler.GetGallery)
+}
 
+func registerAdminRoutes(r *gin.Engine, h *handlers.Content, accounts *handlers.Account, protected []gin.HandlerFunc) {
 	adminAPI := r.Group("/admin", protected...)
 	adminAPI.GET("/blogs", h.ListAdminBlogs)
 	adminAPI.GET("/blogs/:id", h.GetAdminBlog)
@@ -106,5 +123,4 @@ func SetupRouter(db *gorm.DB) (*gin.Engine, error) {
 	adminAPI.GET("/whitelist", accounts.ListWhitelist)
 	adminAPI.POST("/whitelist", accounts.AddWhitelist)
 	adminAPI.DELETE("/whitelist/:id", accounts.DeleteWhitelist)
-	return r, nil
 }

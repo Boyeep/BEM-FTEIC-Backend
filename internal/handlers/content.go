@@ -22,8 +22,23 @@ func bind(c *gin.Context, target any) bool {
 	}
 	return true
 }
+
+func bindListQuery(c *gin.Context, defaultPageSize int) (dto.ListQuery, bool) {
+	var query dto.ListQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		response.Fail(c, apperr.Validation(err.Error()))
+		return query, false
+	}
+	query.Defaults(defaultPageSize)
+	return query, true
+}
+
 func (h *Content) ListBlogs(c *gin.Context) {
-	v, e := h.Blogs.List(c, true)
+	query, ok := bindListQuery(c, 6)
+	if !ok {
+		return
+	}
+	v, e := h.Blogs.List(c, query, true)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -39,7 +54,11 @@ func (h *Content) GetBlog(c *gin.Context) {
 	response.OK(c, v)
 }
 func (h *Content) ListAdminBlogs(c *gin.Context) {
-	v, e := h.Blogs.List(c, false)
+	query, ok := bindListQuery(c, 20)
+	if !ok {
+		return
+	}
+	v, e := h.Blogs.List(c, query, false)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -87,7 +106,11 @@ func (h *Content) DeleteBlog(c *gin.Context) {
 }
 
 func (h *Content) ListEvents(c *gin.Context) {
-	v, e := h.Events.List(c, c.Query("category"), true)
+	query, ok := bindListQuery(c, 8)
+	if !ok {
+		return
+	}
+	v, e := h.Events.List(c, query, true)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -103,7 +126,11 @@ func (h *Content) GetEvent(c *gin.Context) {
 	response.OK(c, v)
 }
 func (h *Content) ListAdminEvents(c *gin.Context) {
-	v, e := h.Events.List(c, c.Query("category"), false)
+	query, ok := bindListQuery(c, 20)
+	if !ok {
+		return
+	}
+	v, e := h.Events.List(c, query, false)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -151,7 +178,11 @@ func (h *Content) DeleteEvent(c *gin.Context) {
 }
 
 func (h *Content) ListGallery(c *gin.Context) {
-	v, e := h.Gallery.List(c)
+	query, ok := bindListQuery(c, 12)
+	if !ok {
+		return
+	}
+	v, e := h.Gallery.List(c, query)
 	if e != nil {
 		response.Fail(c, e)
 		return

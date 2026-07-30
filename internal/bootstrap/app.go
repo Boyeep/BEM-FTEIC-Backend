@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"repo-backend/config"
-	"repo-backend/internal/database"
 	"repo-backend/internal/routes"
 
 	"github.com/gin-gonic/gin"
@@ -21,8 +20,6 @@ func New() (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap database: %w", err)
 	}
-	database.Set(db)
-
 	router, err := routes.SetupRouter(db)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap router: %w", err)
