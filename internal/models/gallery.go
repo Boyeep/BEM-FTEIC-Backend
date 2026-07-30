@@ -3,10 +3,16 @@ package models
 import "time"
 
 type Gallery struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
+	ID        string    `json:"id" gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
 	Title     string    `json:"title"`
-	Thumbnail string    `json:"thumbnail"`
-	DriveLink string    `json:"drive_link"`
+	Link      string    `json:"link"`
+	ImageURL  string    `json:"image_url"`
+	TakenAt   string    `json:"taken_at" gorm:"type:date"`
+	CreatedBy *string   `json:"created_by" gorm:"type:uuid"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (Gallery) TableName() string {
+	return "galeri"
 }

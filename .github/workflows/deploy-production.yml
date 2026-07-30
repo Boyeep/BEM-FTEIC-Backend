@@ -84,9 +84,14 @@ jobs:
             fi
 
             sudo docker compose -p group1 config --quiet
-            sudo docker compose -p group1 up -d --build backend db
+            sudo docker compose -p group1 build backend
+
+            echo "Running database migrations..."
+            sudo docker compose -p group1 run --rm backend /app/server --migrate
+
+            sudo docker compose -p group1 up -d backend
 
             curl --retry 15 --retry-delay 3 --retry-connrefused --retry-all-errors \
-              --fail --silent --show-error http://127.0.0.1:8002/health
+              --fail --silent --show-error http://127.0.0.1:8002/ready
 
-            sudo docker compose -p group1 ps backend db
+            sudo docker compose -p group1 ps backend

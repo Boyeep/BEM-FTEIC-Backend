@@ -8,37 +8,11 @@ services:
         required: false
     environment:
       PORT: 8080
-      DB_HOST: db
-      DB_PORT: 5432
-    depends_on:
-      db:
-        condition: service_healthy
     ports:
       - "8002:8080"
     volumes:
       - backend_uploads:/app/uploads
     restart: unless-stopped
 
-  db:
-    image: postgres:16-alpine
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "8003:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
 volumes:
   backend_uploads:
-  postgres_data:

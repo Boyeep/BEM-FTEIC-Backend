@@ -1,15 +1,18 @@
 package models
 
-import (
-	"gorm.io/gorm"
-)
+import "time"
 
 type Blog struct {
-	gorm.Model
-	Title       string `json:"title"`
-	Thumbnail   string `json:"thumbnail"`
-	Description string `json:"description" gorm:"type:text"`
-	AdminID     uint   `json:"admin_id"`
-	AuthorName  string `json:"author_name"`
-	AuthorPhoto string `json:"author_photo"`
+	ID          string    `json:"id" gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	Title       string    `json:"title"`
+	Excerpt     string    `json:"excerpt"`
+	Author      string    `json:"author"`
+	Category    string    `json:"category"`
+	CoverImage  string    `json:"cover_image"`
+	Content     string    `json:"content"`
+	Status      string    `json:"status"`
+	PublishedAt time.Time `json:"published_at"`
+	CreatedBy   *string   `json:"created_by" gorm:"type:uuid"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }

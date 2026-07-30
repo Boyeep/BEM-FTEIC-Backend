@@ -2,186 +2,83 @@ package handlers
 
 import (
 	"net/http"
+	"time"
+
 	"repo-backend/internal/database"
 	"repo-backend/internal/models"
-	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-// CreateEvent membuat event baru dengan upload foto
 func CreateEvent(c *gin.Context) {
-	title := c.PostForm("title")
-	description := c.PostForm("description")
-	organizer := c.PostForm("organizer")
-	location := c.PostForm("location")
-	isPublishedStr := c.PostForm("is_published")
-	startDateStr := c.PostForm("start_date")
-	endDateStr := c.PostForm("end_date")
-
-	if title == "" || organizer == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "title dan organizer wajib diisi"})
+	var event models.Event
+	if err := c.ShouldBindJSON(&event); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	// Parse tanggal (format: 2006-01-02)
-	var startDate, endDate time.Time
-	if startDateStr != "" {
-		if t, err := time.Parse("2006-01-02", startDateStr); err == nil {
-			startDate = t
-		}
-	}
-	if endDateStr != "" {
-		if t, err := time.Parse("2006-01-02", endDateStr); err == nil {
-			endDate = t
-		}
-	}
-
-	isPublished := isPublishedStr == "true" || isPublishedStr == "1"
-
-	// Handle upload foto
-	var photoPath string
-	file, err := c.FormFile("photo")
-	if err == nil {
-		filename := strconv.FormatInt(time.Now().UnixNano(), 10) + "_" + file.Filename
-		filePath := "uploads/" + filename
-		if err := c.SaveUploadedFile(file, filePath); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan foto"})
-			return
-		}
-		photoPath = filePath
-	}
-
-	event := models.Event{
-		Title:       title,
-		Description: description,
-		Photo:       photoPath,
-		Organizer:   models.Organizer(organizer),
-		StartDate:   startDate,
-		EndDate:     endDate,
-		Location:    location,
-		IsPublished: isPublished,
-	}
-
-	if result := database.DB.Create(&event); result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+	userID := c.GetString("user_id")
+	event.CreatedBy = &userID
+	if err := database.DB.Create(&event).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusCreated, event)
 }
 
-// GetEvents mengambil semua event, bisa difilter by organizer
 func GetEvents(c *gin.Context) {
 	var events []models.Event
-
-	query := database.DB.Model(&models.Event{})
-
-	// Filter opsional berdasarkan organizer
-	if organizer := c.Query("organizer"); organizer != "" {
-		query = query.Where("organizer = ?", organizer)
+	query := database.DB.Order("event_date DESC")
+	if category := c.Query("category"); category != "" {
+		query = query.Where("category = ?", category)
 	}
-
-	// Filter opsional hanya yang sudah dipublish
-	if published := c.Query("published"); published == "true" {
-		query = query.Where("is_published = ?", true)
+	if c.Query("published") == "true" {
+		query = query.Where("status = ?", "PUBLISHED")
 	}
-
-	query = query.Order("start_date ASC")
-
-	if result := query.Find(&events); result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+	if err := query.Find(&events).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, events)
 }
 
-// GetEvent mengambil satu event berdasarkan ID
 func GetEvent(c *gin.Context) {
-	id := c.Param("id")
 	var event models.Event
-
-	if result := database.DB.First(&event, id); result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Event tidak ditemukan"})
+	if err := database.DB.First(&event, "id = ?", c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "event not found"})
 		return
 	}
-
 	c.JSON(http.StatusOK, event)
 }
 
-// UpdateEvent mengupdate event berdasarkan ID
 func UpdateEvent(c *gin.Context) {
-	id := c.Param("id")
-	var event models.Event
-
-	if result := database.DB.First(&event, id); result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Event tidak ditemukan"})
+	var payload models.Event
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	// Update field teks jika ada
-	if title := c.PostForm("title"); title != "" {
-		event.Title = title
-	}
-	if description := c.PostForm("description"); description != "" {
-		event.Description = description
-	}
-	if organizer := c.PostForm("organizer"); organizer != "" {
-		event.Organizer = models.Organizer(organizer)
-	}
-	if location := c.PostForm("location"); location != "" {
-		event.Location = location
-	}
-	if startDateStr := c.PostForm("start_date"); startDateStr != "" {
-		if t, err := time.Parse("2006-01-02", startDateStr); err == nil {
-			event.StartDate = t
-		}
-	}
-	if endDateStr := c.PostForm("end_date"); endDateStr != "" {
-		if t, err := time.Parse("2006-01-02", endDateStr); err == nil {
-			event.EndDate = t
-		}
-	}
-	if isPublishedStr := c.PostForm("is_published"); isPublishedStr != "" {
-		event.IsPublished = isPublishedStr == "true" || isPublishedStr == "1"
-	}
-
-	// Update foto jika ada file baru
-	file, err := c.FormFile("photo")
-	if err == nil {
-		filename := strconv.FormatInt(time.Now().UnixNano(), 10) + "_" + file.Filename
-		filePath := "uploads/" + filename
-		if err := c.SaveUploadedFile(file, filePath); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan foto"})
-			return
-		}
-		event.Photo = filePath
-	}
-
-	if result := database.DB.Save(&event); result.Error != nil {
+	payload.ID = ""
+	payload.CreatedBy = nil
+	payload.CreatedAt = time.Time{}
+	payload.UpdatedAt = time.Now()
+	result := database.DB.Model(&models.Event{}).
+		Where("id = ?", c.Param("id")).
+		Updates(payload)
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return
 	}
-
-	c.JSON(http.StatusOK, event)
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "event not found"})
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
-// DeleteEvent menghapus event berdasarkan ID
 func DeleteEvent(c *gin.Context) {
-	id := c.Param("id")
-	var event models.Event
-
-	if result := database.DB.First(&event, id); result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Event tidak ditemukan"})
-		return
-	}
-
-	if result := database.DB.Delete(&event); result.Error != nil {
+	result := database.DB.Delete(&models.Event{}, "id = ?", c.Param("id"))
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Event berhasil dihapus"})
+	c.Status(http.StatusNoContent)
 }
