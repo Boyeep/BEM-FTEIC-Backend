@@ -1,6 +1,7 @@
 package models
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"regexp"
 	"time"
@@ -29,3 +30,36 @@ func ParseDate(value string) (Date, error) {
 }
 
 func (date Date) String() string { return string(date) }
+
+func (date *Date) Scan(value any) error {
+	switch raw := value.(type) {
+	case nil:
+		*date = ""
+		return nil
+	case time.Time:
+		*date = Date(raw.Format(time.DateOnly))
+		return nil
+	case string:
+		parsed, err := ParseDate(raw)
+		if err != nil {
+			return err
+		}
+		*date = parsed
+		return nil
+	case []byte:
+		return date.Scan(string(raw))
+	default:
+		return fmt.Errorf("scan date: unsupported value type %T", value)
+	}
+}
+
+func (date Date) Value() (driver.Value, error) {
+	if date == "" {
+		return nil, nil
+	}
+	parsed, err := ParseDate(string(date))
+	if err != nil {
+		return nil, err
+	}
+	return parsed.String(), nil
+}
