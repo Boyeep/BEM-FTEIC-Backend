@@ -25,7 +25,7 @@ func SetupRouter(db *gorm.DB, dependencies *container.Container) (*gin.Engine, e
 		return nil, err
 	}
 
-	h, accounts := dependencies.Content, dependencies.Accounts
+	accounts := dependencies.Accounts
 
 	r := gin.New()
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "172.16.0.0/12"}); err != nil {
@@ -33,7 +33,14 @@ func SetupRouter(db *gorm.DB, dependencies *container.Container) (*gin.Engine, e
 	}
 	r.Use(middleware.RequestID(), middleware.SecurityHeaders(), gin.Logger(), middleware.Recovery())
 	r.Use(middleware.CORS(config.Optional("ALLOWED_ORIGINS", "http://localhost:3000,https://bem-fteic.com,https://www.bem-fteic.com")))
-	r.Use(middleware.RateLimit(120, time.Minute))
+	rateLimitStore := middleware.RateLimitStore(middleware.NewMemoryRateLimitStore())
+	if redisURL := config.Optional("REDIS_URL", ""); redisURL != "" {
+		rateLimitStore, err = middleware.NewRedisRateLimitStore(redisURL, "bem-fteic:rate-limit")
+		if err != nil {
+			return nil, err
+		}
+	}
+	r.Use(middleware.RateLimitWithStore(rateLimitStore, 120, time.Minute))
 	r.NoRoute(func(c *gin.Context) {
 		response.Fail(c, apperr.NotFound("route"))
 	})
@@ -58,8 +65,8 @@ func SetupRouter(db *gorm.DB, dependencies *container.Container) (*gin.Engine, e
 	r.GET("/visitors/count", dependencies.Analytics.Count)
 
 	registerMediaRoutes(r, dependencies.Media, protected)
-	registerPublicContentRoutes(r, h)
-	registerAdminRoutes(r, h, accounts, protected)
+	registerPublicContentRoutes(r, dependencies)
+	registerAdminRoutes(r, dependencies, accounts, protected)
 	return r, nil
 }
 
@@ -69,37 +76,37 @@ func registerMediaRoutes(r *gin.Engine, handler *handlers.Media, protected []gin
 	r.Static("/uploads", "./uploads")
 }
 
-func registerPublicContentRoutes(r *gin.Engine, handler *handlers.Content) {
+func registerPublicContentRoutes(r *gin.Engine, dependencies *container.Container) {
 	blogs := r.Group("/blogs")
-	blogs.GET("/", handler.ListBlogs)
-	blogs.GET("/:id", handler.GetBlog)
+	blogs.GET("/", dependencies.Blog.ListPublic)
+	blogs.GET("/:id", dependencies.Blog.GetPublic)
 
 	events := r.Group("/events")
-	events.GET("/", handler.ListEvents)
-	events.GET("/:id", handler.GetEvent)
+	events.GET("/", dependencies.Event.ListPublic)
+	events.GET("/:id", dependencies.Event.GetPublic)
 
 	gallery := r.Group("/gallery")
-	gallery.GET("/", handler.ListGallery)
-	gallery.GET("/:id", handler.GetGallery)
+	gallery.GET("/", dependencies.Gallery.List)
+	gallery.GET("/:id", dependencies.Gallery.Get)
 }
 
-func registerAdminRoutes(r *gin.Engine, h *handlers.Content, accounts *handlers.Account, protected []gin.HandlerFunc) {
+func registerAdminRoutes(r *gin.Engine, dependencies *container.Container, accounts *handlers.Account, protected []gin.HandlerFunc) {
 	adminAPI := r.Group("/admin", protected...)
-	adminAPI.GET("/blogs", h.ListAdminBlogs)
-	adminAPI.GET("/blogs/:id", h.GetAdminBlog)
-	adminAPI.POST("/blogs", h.CreateBlog)
-	adminAPI.PUT("/blogs/:id", h.UpdateBlog)
-	adminAPI.DELETE("/blogs/:id", h.DeleteBlog)
-	adminAPI.GET("/events", h.ListAdminEvents)
-	adminAPI.GET("/events/:id", h.GetAdminEvent)
-	adminAPI.POST("/events", h.CreateEvent)
-	adminAPI.PUT("/events/:id", h.UpdateEvent)
-	adminAPI.DELETE("/events/:id", h.DeleteEvent)
-	adminAPI.GET("/gallery", h.ListGallery)
-	adminAPI.GET("/gallery/:id", h.GetGallery)
-	adminAPI.POST("/gallery", h.CreateGallery)
-	adminAPI.PUT("/gallery/:id", h.UpdateGallery)
-	adminAPI.DELETE("/gallery/:id", h.DeleteGallery)
+	adminAPI.GET("/blogs", dependencies.Blog.ListAdmin)
+	adminAPI.GET("/blogs/:id", dependencies.Blog.GetAdmin)
+	adminAPI.POST("/blogs", dependencies.Blog.Create)
+	adminAPI.PUT("/blogs/:id", dependencies.Blog.Update)
+	adminAPI.DELETE("/blogs/:id", dependencies.Blog.Delete)
+	adminAPI.GET("/events", dependencies.Event.ListAdmin)
+	adminAPI.GET("/events/:id", dependencies.Event.GetAdmin)
+	adminAPI.POST("/events", dependencies.Event.Create)
+	adminAPI.PUT("/events/:id", dependencies.Event.Update)
+	adminAPI.DELETE("/events/:id", dependencies.Event.Delete)
+	adminAPI.GET("/gallery", dependencies.Gallery.List)
+	adminAPI.GET("/gallery/:id", dependencies.Gallery.Get)
+	adminAPI.POST("/gallery", dependencies.Gallery.Create)
+	adminAPI.PUT("/gallery/:id", dependencies.Gallery.Update)
+	adminAPI.DELETE("/gallery/:id", dependencies.Gallery.Delete)
 	adminAPI.GET("/whitelist", accounts.ListWhitelist)
 	adminAPI.POST("/whitelist", accounts.AddWhitelist)
 	adminAPI.DELETE("/whitelist/:id", accounts.DeleteWhitelist)

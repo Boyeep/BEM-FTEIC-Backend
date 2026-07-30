@@ -23,8 +23,11 @@ config/                 environment dan database config
 database/migrations/    migrasi SQL berurutan
 internal/dto/           validasi request
 internal/handlers/      transport HTTP
-internal/service/       business logic
-internal/repository/    akses database
+  internal/blog/          vertical module blog
+  internal/event/         vertical module event
+  internal/gallery/       vertical module galeri
+  internal/service/       account dan analytics service
+  internal/repository/    account dan analytics repository
 internal/middleware/    auth, role, CORS, rate limit, request ID
 pkg/apperr/             error aplikasi
 pkg/response/           format response standar
@@ -36,6 +39,7 @@ pkg/response/           format response standar
 - PostgreSQL RLS dan grant terbatas
 - DTO/query validation, pagination server-side, serta response/error terstandardisasi
 - Request ID, security headers, rate limiting, dan HTTP timeouts
+- Redis-backed distributed rate limiting dengan fallback memory untuk development
 - Batas ukuran upload dan pemeriksaan MIME
 - Rollback deployment jika migration atau readiness gagal
 

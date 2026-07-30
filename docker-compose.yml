@@ -9,11 +9,25 @@ services:
         required: false
     environment:
       PORT: 8080
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8002:8080"
     volumes:
       - backend_uploads:/app/uploads
       - ./backups:/backups
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
 volumes:
