@@ -1,7 +1,10 @@
 package database
 
 import (
+	"fmt"
 	"log"
+	"os"
+	"time"
 
 	"repo-backend/internal/models"
 
@@ -12,14 +15,29 @@ import (
 var DB *gorm.DB
 
 func ConnectDB() {
-	// Connection string based on your credentials
-	// Note: We use 'bem_backend' as the database name. You need to create this DB first!
-	dsn := "host=localhost user=postgres password=admin dbname=bem_backend port=5432 sslmode=disable TimeZone=Asia/Jakarta"
+	dsn := fmt.Sprintf(
+		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s",
+		getEnv("DB_HOST", "localhost"),
+		getEnv("DB_USER", "postgres"),
+		getEnv("DB_PASSWORD", "admin"),
+		getEnv("DB_NAME", "bem_backend"),
+		getEnv("DB_PORT", "5432"),
+		getEnv("DB_SSLMODE", "disable"),
+		getEnv("DB_TIMEZONE", "Asia/Jakarta"),
+	)
 
 	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	for attempt := 1; attempt <= 10; attempt++ {
+		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		if err == nil {
+			break
+		}
+
+		log.Printf("Database connection attempt %d/10 failed: %v", attempt, err)
+		time.Sleep(3 * time.Second)
+	}
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		log.Fatal("Failed to connect to database after 10 attempts:", err)
 	}
 
 	err = DB.AutoMigrate(&models.Admin{})
@@ -32,4 +50,11 @@ func ConnectDB() {
 	DB.AutoMigrate(&models.Event{})
 
 	log.Println("Connected to PostgreSQL database")
+}
+
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }

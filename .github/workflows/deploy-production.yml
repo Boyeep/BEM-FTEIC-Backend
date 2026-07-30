@@ -1,0 +1,86 @@
+name: Deploy Backend Production
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+
+concurrency:
+  group: backend-production-group1
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package source
+        run: tar --exclude=.git --exclude=.env --exclude=uploads -czf backend-source.tar.gz .
+
+      - name: Upload source to VPS
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: backend-source.tar.gz
+          target: /tmp
+
+      - name: Deploy with Docker Compose
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 15m
+          script: |
+            set -eu
+
+            APP_DIR="$HOME/backend"
+            ARCHIVE="/tmp/backend-source.tar.gz"
+
+            mkdir -p "$APP_DIR"
+            tar -xzf "$ARCHIVE" -C "$APP_DIR"
+            rm -f "$ARCHIVE"
+
+            cd "$APP_DIR"
+
+            if [ ! -f .env ]; then
+              echo "Missing $APP_DIR/.env"
+              exit 1
+            fi
+
+            sudo docker compose -p group1 config --quiet
+            sudo docker compose -p group1 up -d --build backend db
+
+            curl --retry 15 --retry-delay 3 --retry-connrefused \
+              --fail --silent --show-error http://127.0.0.1:8002/health
+
+            sudo docker compose -p group1 ps backend db
