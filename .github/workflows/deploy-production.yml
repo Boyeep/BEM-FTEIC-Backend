@@ -19,6 +19,19 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bem_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d bem_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,7 +43,11 @@ jobs:
           cache: true
 
       - name: Test
-        run: go test ./...
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bem_test?sslmode=disable
+        run: |
+          go test ./...
+          go test -tags=integration ./database
 
   deploy:
     needs: test
@@ -83,15 +100,35 @@ jobs:
               exit 1
             fi
 
-            sudo docker compose -p group1 config --quiet
-            sudo docker compose -p group1 build backend
+            RELEASE_TAG="${{ github.sha }}"
+            PREVIOUS_TAG="$(cat .last-successful-image 2>/dev/null || echo latest)"
+            mkdir -p backups
+
+            sudo env BACKEND_IMAGE_TAG="$RELEASE_TAG" docker compose -p group1 config --quiet
+
+            echo "Backing up upload volume..."
+            sudo env BACKEND_IMAGE_TAG="$PREVIOUS_TAG" docker compose -p group1 run --rm --user root \
+              backend sh -c 'tar -czf "/backups/uploads-$(date -u +%Y%m%dT%H%M%SZ).tar.gz" -C /app/uploads .'
+            find "$APP_DIR/backups" -type f -name 'uploads-*.tar.gz' -mtime +14 -delete
+
+            sudo env BACKEND_IMAGE_TAG="$RELEASE_TAG" docker compose -p group1 build backend
 
             echo "Running database migrations..."
-            sudo docker compose -p group1 run --rm backend /app/server --migrate
+            if ! sudo env BACKEND_IMAGE_TAG="$RELEASE_TAG" docker compose -p group1 run --rm backend /app/server --migrate; then
+              echo "Migration failed; current release remains active."
+              exit 1
+            fi
 
-            sudo docker compose -p group1 up -d backend
+            sudo env BACKEND_IMAGE_TAG="$RELEASE_TAG" docker compose -p group1 up -d backend
 
-            curl --retry 15 --retry-delay 3 --retry-connrefused --retry-all-errors \
-              --fail --silent --show-error http://127.0.0.1:8002/ready
+            if ! curl --retry 15 --retry-delay 3 --retry-connrefused --retry-all-errors \
+              --fail --silent --show-error http://127.0.0.1:8002/ready; then
+              echo "Readiness failed; rolling back to $PREVIOUS_TAG..."
+              sudo env BACKEND_IMAGE_TAG="$PREVIOUS_TAG" docker compose -p group1 up -d backend
+              curl --retry 10 --retry-delay 3 --retry-connrefused --retry-all-errors \
+                --fail --silent --show-error http://127.0.0.1:8002/ready
+              exit 1
+            fi
 
-            sudo docker compose -p group1 ps backend
+            printf '%s\n' "$RELEASE_TAG" > .last-successful-image
+            sudo env BACKEND_IMAGE_TAG="$RELEASE_TAG" docker compose -p group1 ps backend

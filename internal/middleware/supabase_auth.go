@@ -6,6 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"repo-backend/pkg/apperr"
+	"repo-backend/pkg/response"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -35,7 +38,8 @@ func (a *SupabaseAuth) Required() gin.HandlerFunc {
 			"Bearer ",
 		))
 		if token == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+			response.Fail(c, apperr.New("UNAUTHORIZED", "missing bearer token", http.StatusUnauthorized))
+			c.Abort()
 			return
 		}
 
@@ -46,27 +50,31 @@ func (a *SupabaseAuth) Required() gin.HandlerFunc {
 			nil,
 		)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "create auth request"})
+			response.Fail(c, apperr.Internal(err))
+			c.Abort()
 			return
 		}
 		req.Header.Set("apikey", a.apiKey)
 		req.Header.Set("Authorization", "Bearer "+token)
 
-		response, err := a.client.Do(req)
+		authResponse, err := a.client.Do(req)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": "authentication service unavailable"})
+			response.Fail(c, apperr.New("AUTH_UNAVAILABLE", "authentication service unavailable", http.StatusBadGateway))
+			c.Abort()
 			return
 		}
-		defer response.Body.Close()
+		defer authResponse.Body.Close()
 
-		if response.StatusCode != http.StatusOK {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+		if authResponse.StatusCode != http.StatusOK {
+			response.Fail(c, apperr.New("UNAUTHORIZED", "invalid or expired token", http.StatusUnauthorized))
+			c.Abort()
 			return
 		}
 
 		var user supabaseUser
-		if err := json.NewDecoder(response.Body).Decode(&user); err != nil || user.ID == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid user response"})
+		if err := json.NewDecoder(authResponse.Body).Decode(&user); err != nil || user.ID == "" {
+			response.Fail(c, apperr.New("UNAUTHORIZED", "invalid user response", http.StatusUnauthorized))
+			c.Abort()
 			return
 		}
 

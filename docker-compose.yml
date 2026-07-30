@@ -1,5 +1,6 @@
 services:
   backend:
+    image: group1-backend:${BACKEND_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -12,6 +13,7 @@ services:
       - "8002:8080"
     volumes:
       - backend_uploads:/app/uploads
+      - ./backups:/backups
     restart: unless-stopped
 
 volumes:

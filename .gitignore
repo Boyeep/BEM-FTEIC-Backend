@@ -18,6 +18,8 @@
 go.work
 .env
 uploads/
+backups/
+.last-successful-image
 
 # SQLite Database
 *.db

@@ -8,6 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"repo-backend/pkg/apperr"
+	"repo-backend/pkg/response"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,17 +25,17 @@ var allowedImageExtensions = map[string]struct{}{
 func UploadImage(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		response.Fail(c, apperr.Validation("file is required"))
 		return
 	}
 	if file.Size > 10<<20 {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file exceeds 10 MB"})
+		response.Fail(c, apperr.New("FILE_TOO_LARGE", "file exceeds 10 MB", http.StatusRequestEntityTooLarge))
 		return
 	}
 
 	extension := strings.ToLower(filepath.Ext(file.Filename))
 	if _, ok := allowedImageExtensions[extension]; !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported image type"})
+		response.Fail(c, apperr.Validation("unsupported image type"))
 		return
 	}
 
@@ -40,11 +43,11 @@ func UploadImage(c *gin.Context) {
 	filename := fmt.Sprintf("%s-%d%s", userID, time.Now().UnixNano(), extension)
 	destination := filepath.Join("uploads", filename)
 	if err := os.MkdirAll("uploads", 0o750); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "prepare upload directory"})
+		response.Fail(c, apperr.Internal(err))
 		return
 	}
 	if err := c.SaveUploadedFile(file, destination); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "save image"})
+		response.Fail(c, apperr.Internal(err))
 		return
 	}
 
@@ -52,7 +55,7 @@ func UploadImage(c *gin.Context) {
 	if publicBaseURL == "" {
 		publicBaseURL = strings.TrimRight("https://"+c.Request.Host, "/")
 	}
-	c.JSON(http.StatusCreated, gin.H{
+	response.Created(c, gin.H{
 		"url": publicBaseURL + "/uploads/" + filename,
 	})
 }
