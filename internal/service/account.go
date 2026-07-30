@@ -76,9 +76,10 @@ func (s *AccountService) ListWhitelist(ctx context.Context) ([]models.WhitelistE
 }
 
 func (s *AccountService) AddWhitelist(ctx context.Context, email, creator string) (*models.WhitelistEntry, error) {
+	creatorID := models.UUID(creator)
 	entry := &models.WhitelistEntry{
 		Email:     strings.ToLower(strings.TrimSpace(email)),
-		CreatedBy: &creator,
+		CreatedBy: &creatorID,
 	}
 	if err := s.repo.CreateWhitelist(ctx, entry); err != nil {
 		if errors.Is(err, repository.ErrConflict) {

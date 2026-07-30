@@ -68,7 +68,8 @@ func (s *BlogService) Create(ctx context.Context, in dto.CreateBlog, userID stri
 	if in.PublishedAt != "" {
 		publishedAt, _ = time.Parse(time.RFC3339, in.PublishedAt)
 	}
-	v := &models.Blog{Title: in.Title, Excerpt: in.Excerpt, Author: in.Author, Category: in.Category, CoverImage: in.CoverImage, Content: in.Content, Status: in.Status, PublishedAt: publishedAt, CreatedBy: &userID}
+	creatorID := models.UUID(userID)
+	v := &models.Blog{Title: in.Title, Excerpt: in.Excerpt, Author: in.Author, Category: in.Category, CoverImage: in.CoverImage, Content: in.Content, Status: in.Status, PublishedAt: publishedAt, CreatedBy: &creatorID}
 	if err := s.repo.Create(ctx, v); err != nil {
 		return nil, serviceError(err, "blog")
 	}
@@ -125,7 +126,8 @@ func (s *EventService) GetPublic(ctx context.Context, id string) (*models.Event,
 	return v, nil
 }
 func (s *EventService) Create(ctx context.Context, in dto.CreateEvent, userID string) (*models.Event, error) {
-	v := &models.Event{Title: in.Title, Description: in.Description, Author: in.Author, Category: in.Category, CoverImage: in.CoverImage, EventDate: in.EventDate, Status: in.Status, PublicationStatus: in.PublicationStatus, CreatedBy: &userID}
+	creatorID := models.UUID(userID)
+	v := &models.Event{Title: in.Title, Description: in.Description, Author: in.Author, Category: in.Category, CoverImage: in.CoverImage, EventDate: models.Date(in.EventDate), Status: in.Status, PublicationStatus: in.PublicationStatus, CreatedBy: &creatorID}
 	if err := s.repo.Create(ctx, v); err != nil {
 		return nil, serviceError(err, "event")
 	}
@@ -137,7 +139,7 @@ func (s *EventService) Update(ctx context.Context, id string, in dto.UpdateEvent
 		return nil, err
 	}
 	oldCover := v.CoverImage
-	v.Title, v.Description, v.Author, v.Category, v.CoverImage, v.EventDate, v.Status, v.PublicationStatus = in.Title, in.Description, in.Author, in.Category, in.CoverImage, in.EventDate, in.Status, in.PublicationStatus
+	v.Title, v.Description, v.Author, v.Category, v.CoverImage, v.EventDate, v.Status, v.PublicationStatus = in.Title, in.Description, in.Author, in.Category, in.CoverImage, models.Date(in.EventDate), in.Status, in.PublicationStatus
 	if err := s.repo.Update(ctx, v); err != nil {
 		return nil, serviceError(err, "event")
 	}
@@ -174,7 +176,8 @@ func (s *GalleryService) Create(ctx context.Context, in dto.CreateGallery, userI
 	if in.Category == "" {
 		in.Category = "all"
 	}
-	v := &models.Gallery{Title: in.Title, Link: in.Link, ImageURL: in.ImageURL, Category: in.Category, TakenAt: in.TakenAt, CreatedBy: &userID}
+	creatorID := models.UUID(userID)
+	v := &models.Gallery{Title: in.Title, Link: in.Link, ImageURL: in.ImageURL, Category: in.Category, TakenAt: models.Date(in.TakenAt), CreatedBy: &creatorID}
 	if err := s.repo.Create(ctx, v); err != nil {
 		return nil, serviceError(err, "gallery item")
 	}
@@ -189,7 +192,7 @@ func (s *GalleryService) Update(ctx context.Context, id string, in dto.UpdateGal
 		in.Category = v.Category
 	}
 	oldImage := v.ImageURL
-	v.Title, v.Link, v.ImageURL, v.Category, v.TakenAt = in.Title, in.Link, in.ImageURL, in.Category, in.TakenAt
+	v.Title, v.Link, v.ImageURL, v.Category, v.TakenAt = in.Title, in.Link, in.ImageURL, in.Category, models.Date(in.TakenAt)
 	if err := s.repo.Update(ctx, v); err != nil {
 		return nil, serviceError(err, "gallery item")
 	}

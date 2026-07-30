@@ -5,11 +5,9 @@ import (
 	"time"
 
 	"repo-backend/config"
+	"repo-backend/internal/container"
 	"repo-backend/internal/handlers"
-	"repo-backend/internal/media"
 	"repo-backend/internal/middleware"
-	"repo-backend/internal/repository"
-	"repo-backend/internal/service"
 	"repo-backend/pkg/apperr"
 	"repo-backend/pkg/response"
 
@@ -17,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRouter(db *gorm.DB) (*gin.Engine, error) {
+func SetupRouter(db *gorm.DB, dependencies *container.Container) (*gin.Engine, error) {
 	supabaseURL, err := config.Required("SUPABASE_URL")
 	if err != nil {
 		return nil, err
@@ -27,25 +25,7 @@ func SetupRouter(db *gorm.DB) (*gin.Engine, error) {
 		return nil, err
 	}
 
-	contents := repository.NewContentRepository(db)
-	mediaService := media.NewService(
-		media.NewLocalStorage("uploads"),
-		config.Optional("PUBLIC_API_URL", ""),
-	)
-	h := &handlers.Content{
-		Blogs:   service.NewBlog(contents, mediaService),
-		Events:  service.NewEvent(repository.NewEventRepository(db), mediaService),
-		Gallery: service.NewGallery(repository.NewGalleryRepository(db), mediaService),
-	}
-	accounts := &handlers.Account{
-		Service: service.NewAccount(repository.NewAccountRepository(db)),
-	}
-	analytics := &handlers.Analytics{
-		Service: service.NewAnalytics(repository.NewAnalyticsRepository(db)),
-	}
-	mediaHandler := &handlers.Media{
-		Service: mediaService,
-	}
+	h, accounts := dependencies.Content, dependencies.Accounts
 
 	r := gin.New()
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "172.16.0.0/12"}); err != nil {
@@ -74,10 +54,10 @@ func SetupRouter(db *gorm.DB) (*gin.Engine, error) {
 	r.GET("/me", auth, accounts.Me)
 	r.PUT("/me", auth, accounts.UpdateMe)
 	r.GET("/profiles", accounts.PublicProfiles)
-	r.POST("/visitors", analytics.Track)
-	r.GET("/visitors/count", analytics.Count)
+	r.POST("/visitors", dependencies.Analytics.Track)
+	r.GET("/visitors/count", dependencies.Analytics.Count)
 
-	registerMediaRoutes(r, mediaHandler, protected)
+	registerMediaRoutes(r, dependencies.Media, protected)
 	registerPublicContentRoutes(r, h)
 	registerAdminRoutes(r, h, accounts, protected)
 	return r, nil

@@ -58,7 +58,7 @@ func NewContentRepository(db *gorm.DB) *contentRepository {
 
 func (r *contentRepository) List(ctx context.Context, options ListOptions) ([]models.Blog, int64, error) {
 	var items []models.Blog
-	query := r.db.WithContext(ctx).Model(&models.Blog{})
+	query := r.db.WithContext(ctx).Model(&models.Blog{}).Preload("AuthorProfile")
 	if options.Published {
 		query = query.Where("status = ?", "PUBLISHED")
 	}
@@ -73,12 +73,12 @@ func (r *contentRepository) List(ctx context.Context, options ListOptions) ([]mo
 
 func (r *contentRepository) Find(ctx context.Context, id string) (*models.Blog, error) {
 	var item models.Blog
-	err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("AuthorProfile").First(&item, "id = ?", id).Error
 	return &item, translateError(err)
 }
 func (r *contentRepository) FindPublished(ctx context.Context, id string) (*models.Blog, error) {
 	var item models.Blog
-	err := r.db.WithContext(ctx).Where("status = ?", "PUBLISHED").First(&item, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("AuthorProfile").Where("status = ?", "PUBLISHED").First(&item, "id = ?", id).Error
 	return &item, translateError(err)
 }
 
@@ -99,7 +99,7 @@ type eventRepository struct{ db *gorm.DB }
 func NewEventRepository(db *gorm.DB) EventRepository { return &eventRepository{db: db} }
 func (r *eventRepository) List(ctx context.Context, options ListOptions) ([]models.Event, int64, error) {
 	var items []models.Event
-	query := r.db.WithContext(ctx).Model(&models.Event{})
+	query := r.db.WithContext(ctx).Model(&models.Event{}).Preload("AuthorProfile")
 	if options.Category != "" {
 		query = query.Where("category = ?", options.Category)
 	}
@@ -122,12 +122,12 @@ func (r *eventRepository) List(ctx context.Context, options ListOptions) ([]mode
 }
 func (r *eventRepository) Find(ctx context.Context, id string) (*models.Event, error) {
 	var item models.Event
-	err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("AuthorProfile").First(&item, "id = ?", id).Error
 	return &item, translateError(err)
 }
 func (r *eventRepository) FindPublished(ctx context.Context, id string) (*models.Event, error) {
 	var item models.Event
-	err := r.db.WithContext(ctx).Where("publication_status = ?", "PUBLISHED").First(&item, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("AuthorProfile").Where("publication_status = ?", "PUBLISHED").First(&item, "id = ?", id).Error
 	return &item, translateError(err)
 }
 func (r *eventRepository) Create(ctx context.Context, item *models.Event) error {
@@ -145,7 +145,7 @@ type galleryRepository struct{ db *gorm.DB }
 func NewGalleryRepository(db *gorm.DB) GalleryRepository { return &galleryRepository{db: db} }
 func (r *galleryRepository) List(ctx context.Context, options ListOptions) ([]models.Gallery, int64, error) {
 	var items []models.Gallery
-	query := r.db.WithContext(ctx).Model(&models.Gallery{})
+	query := r.db.WithContext(ctx).Model(&models.Gallery{}).Preload("AuthorProfile")
 	if options.Category != "" && options.Category != "all" {
 		query = query.Where("category = ?", options.Category)
 	}
@@ -159,7 +159,7 @@ func (r *galleryRepository) List(ctx context.Context, options ListOptions) ([]mo
 }
 func (r *galleryRepository) Find(ctx context.Context, id string) (*models.Gallery, error) {
 	var item models.Gallery
-	err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("AuthorProfile").First(&item, "id = ?", id).Error
 	return &item, translateError(err)
 }
 func (r *galleryRepository) Create(ctx context.Context, item *models.Gallery) error {
