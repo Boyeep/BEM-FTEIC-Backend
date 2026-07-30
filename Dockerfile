@@ -10,7 +10,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /server ./cm
 
 FROM alpine:3.22
 
-RUN apk add --no-cache tzdata \
+RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S app \
     && adduser -S app -G app
 

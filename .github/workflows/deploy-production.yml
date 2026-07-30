@@ -138,6 +138,10 @@ jobs:
             select_tag "$RELEASE_TAG"
             sudo docker compose -p group1 --env-file .deploy.env build backend
 
+            echo "Verifying the runtime TLS trust store..."
+            sudo docker compose -p group1 --env-file .deploy.env run --rm \
+              --entrypoint sh backend -c 'test -s /etc/ssl/certs/ca-certificates.crt'
+
             echo "Running database migrations..."
             if ! sudo docker compose -p group1 --env-file .deploy.env run --rm backend /app/server --migrate; then
               echo "Migration failed; current release remains active."
