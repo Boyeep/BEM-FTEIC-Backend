@@ -3,6 +3,8 @@ package middleware
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"sync"
@@ -28,6 +30,19 @@ func RequestID() gin.HandlerFunc {
 		}
 		c.Set("request_id", id)
 		c.Header("X-Request-ID", id)
+		c.Next()
+	}
+}
+
+func Recovery() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Printf("panic request_id=%s: %v", c.GetString("request_id"), recovered)
+				response.Fail(c, apperr.Internal(fmt.Errorf("panic: %v", recovered)))
+				c.Abort()
+			}
+		}()
 		c.Next()
 	}
 }

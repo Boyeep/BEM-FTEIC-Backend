@@ -37,9 +37,12 @@ func SetupRouter(db *gorm.DB) (*gin.Engine, error) {
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "172.16.0.0/12"}); err != nil {
 		return nil, fmt.Errorf("configure trusted proxies: %w", err)
 	}
-	r.Use(middleware.RequestID(), gin.Logger(), gin.Recovery())
+	r.Use(middleware.RequestID(), gin.Logger(), middleware.Recovery())
 	r.Use(middleware.CORS(config.Optional("ALLOWED_ORIGINS", "http://localhost:3000,https://bem-fteic.com,https://www.bem-fteic.com")))
 	r.Use(middleware.RateLimit(120, time.Minute))
+	r.NoRoute(func(c *gin.Context) {
+		response.Fail(c, apperr.NotFound("route"))
+	})
 
 	r.GET("/health", func(c *gin.Context) { response.OK(c, gin.H{"status": "ok"}) })
 	r.GET("/ready", func(c *gin.Context) {
