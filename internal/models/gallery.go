@@ -7,6 +7,7 @@ type Gallery struct {
 	Title     string    `json:"title"`
 	Link      string    `json:"link"`
 	ImageURL  string    `json:"image_url"`
+	Category  string    `json:"category"`
 	TakenAt   string    `json:"taken_at" gorm:"type:date"`
 	CreatedBy *string   `json:"created_by" gorm:"type:uuid"`
 	CreatedAt time.Time `json:"created_at"`

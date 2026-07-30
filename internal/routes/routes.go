@@ -32,12 +32,13 @@ func SetupRouter(db *gorm.DB) (*gin.Engine, error) {
 		Events:  service.NewEvent(repository.NewEventRepository(db)),
 		Gallery: service.NewGallery(repository.NewGalleryRepository(db)),
 	}
+	accounts := &handlers.Account{DB: db}
 
 	r := gin.New()
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "172.16.0.0/12"}); err != nil {
 		return nil, fmt.Errorf("configure trusted proxies: %w", err)
 	}
-	r.Use(middleware.RequestID(), gin.Logger(), middleware.Recovery())
+	r.Use(middleware.RequestID(), middleware.SecurityHeaders(), gin.Logger(), middleware.Recovery())
 	r.Use(middleware.CORS(config.Optional("ALLOWED_ORIGINS", "http://localhost:3000,https://bem-fteic.com,https://www.bem-fteic.com")))
 	r.Use(middleware.RateLimit(120, time.Minute))
 	r.NoRoute(func(c *gin.Context) {
@@ -57,8 +58,11 @@ func SetupRouter(db *gorm.DB) (*gin.Engine, error) {
 	auth := middleware.NewSupabaseAuth(supabaseURL, supabaseAnonKey).Required()
 	admin := middleware.RequireRole(db, "admin")
 	protected := []gin.HandlerFunc{auth, admin}
+	r.GET("/me", auth, accounts.Me)
+	r.PUT("/me", auth, accounts.UpdateMe)
 
 	r.POST("/uploads/images", append(protected, handlers.UploadImage)...)
+	r.DELETE("/uploads/images", append(protected, handlers.DeleteImage)...)
 	r.Static("/uploads", "./uploads")
 
 	blogs := r.Group("/blogs")
@@ -82,5 +86,25 @@ func SetupRouter(db *gorm.DB) (*gin.Engine, error) {
 	gallery.POST("/", append(protected, h.CreateGallery)...)
 	gallery.PUT("/:id", append(protected, h.UpdateGallery)...)
 	gallery.DELETE("/:id", append(protected, h.DeleteGallery)...)
+
+	adminAPI := r.Group("/admin", protected...)
+	adminAPI.GET("/blogs", h.ListAdminBlogs)
+	adminAPI.GET("/blogs/:id", h.GetAdminBlog)
+	adminAPI.POST("/blogs", h.CreateBlog)
+	adminAPI.PUT("/blogs/:id", h.UpdateBlog)
+	adminAPI.DELETE("/blogs/:id", h.DeleteBlog)
+	adminAPI.GET("/events", h.ListAdminEvents)
+	adminAPI.GET("/events/:id", h.GetAdminEvent)
+	adminAPI.POST("/events", h.CreateEvent)
+	adminAPI.PUT("/events/:id", h.UpdateEvent)
+	adminAPI.DELETE("/events/:id", h.DeleteEvent)
+	adminAPI.GET("/gallery", h.ListGallery)
+	adminAPI.GET("/gallery/:id", h.GetGallery)
+	adminAPI.POST("/gallery", h.CreateGallery)
+	adminAPI.PUT("/gallery/:id", h.UpdateGallery)
+	adminAPI.DELETE("/gallery/:id", h.DeleteGallery)
+	adminAPI.GET("/whitelist", accounts.ListWhitelist)
+	adminAPI.POST("/whitelist", accounts.AddWhitelist)
+	adminAPI.DELETE("/whitelist/:id", accounts.DeleteWhitelist)
 	return r, nil
 }

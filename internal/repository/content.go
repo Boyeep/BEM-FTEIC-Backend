@@ -11,6 +11,7 @@ import (
 type BlogRepository interface {
 	List(context.Context, bool) ([]models.Blog, error)
 	Find(context.Context, string) (*models.Blog, error)
+	FindPublished(context.Context, string) (*models.Blog, error)
 	Create(context.Context, *models.Blog) error
 	Update(context.Context, *models.Blog) error
 	Delete(context.Context, string) error
@@ -19,6 +20,7 @@ type BlogRepository interface {
 type EventRepository interface {
 	List(context.Context, string, bool) ([]models.Event, error)
 	Find(context.Context, string) (*models.Event, error)
+	FindPublished(context.Context, string) (*models.Event, error)
 	Create(context.Context, *models.Event) error
 	Update(context.Context, *models.Event) error
 	Delete(context.Context, string) error
@@ -53,6 +55,10 @@ func (r *contentRepository) Find(ctx context.Context, id string) (*models.Blog, 
 	var item models.Blog
 	return &item, r.db.WithContext(ctx).First(&item, "id = ?", id).Error
 }
+func (r *contentRepository) FindPublished(ctx context.Context, id string) (*models.Blog, error) {
+	var item models.Blog
+	return &item, r.db.WithContext(ctx).Where("status = ?", "PUBLISHED").First(&item, "id = ?", id).Error
+}
 
 func (r *contentRepository) Create(ctx context.Context, item *models.Blog) error {
 	return r.db.WithContext(ctx).Create(item).Error
@@ -83,6 +89,10 @@ func (r *eventRepository) List(ctx context.Context, category string, published b
 func (r *eventRepository) Find(ctx context.Context, id string) (*models.Event, error) {
 	var item models.Event
 	return &item, r.db.WithContext(ctx).First(&item, "id = ?", id).Error
+}
+func (r *eventRepository) FindPublished(ctx context.Context, id string) (*models.Event, error) {
+	var item models.Event
+	return &item, r.db.WithContext(ctx).Where("status = ?", "PUBLISHED").First(&item, "id = ?", id).Error
 }
 func (r *eventRepository) Create(ctx context.Context, item *models.Event) error {
 	return r.db.WithContext(ctx).Create(item).Error

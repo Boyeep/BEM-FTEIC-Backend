@@ -2,7 +2,9 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
+	"time"
 
 	"repo-backend/config"
 	"repo-backend/database"
@@ -31,7 +33,16 @@ func main() {
 	}
 
 	port := config.Optional("PORT", "8080")
-	if err := app.Router.Run(":" + port); err != nil {
+	server := &http.Server{
+		Addr:              ":" + port,
+		Handler:           app.Router,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal("failed to start server: ", err)
 	}
 }

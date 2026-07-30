@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -18,9 +19,10 @@ import (
 )
 
 func RequestID() gin.HandlerFunc {
+	validRequestID := regexp.MustCompile(`^[A-Za-z0-9_-]{8,64}$`)
 	return func(c *gin.Context) {
 		id := c.GetHeader("X-Request-ID")
-		if id == "" {
+		if !validRequestID.MatchString(id) {
 			b := make([]byte, 16)
 			if _, err := rand.Read(b); err == nil {
 				id = hex.EncodeToString(b)
@@ -30,6 +32,16 @@ func RequestID() gin.HandlerFunc {
 		}
 		c.Set("request_id", id)
 		c.Header("X-Request-ID", id)
+		c.Next()
+	}
+}
+
+func SecurityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		c.Header("X-Frame-Options", "DENY")
 		c.Next()
 	}
 }
@@ -58,6 +70,13 @@ func RateLimit(limit int, window time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		now, key := time.Now(), c.ClientIP()
 		mu.Lock()
+		if len(visitors) > 10000 {
+			for ip, entry := range visitors {
+				if now.After(entry.reset) {
+					delete(visitors, ip)
+				}
+			}
+		}
 		v := visitors[key]
 		if v == nil || now.After(v.reset) {
 			v = &visitor{reset: now.Add(window)}

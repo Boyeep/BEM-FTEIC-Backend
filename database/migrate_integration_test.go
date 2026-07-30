@@ -19,8 +19,18 @@ func TestMigratePostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec(`CREATE SCHEMA IF NOT EXISTS auth;
-		CREATE TABLE IF NOT EXISTS auth.users (id UUID PRIMARY KEY);`).Error; err != nil {
+	if err := db.Exec(`DO $$ BEGIN
+			IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon; END IF;
+			IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated; END IF;
+		END $$;
+		CREATE SCHEMA IF NOT EXISTS auth;
+		CREATE TABLE IF NOT EXISTS auth.users (
+			id UUID PRIMARY KEY,
+			email TEXT,
+			raw_user_meta_data JSONB NOT NULL DEFAULT '{}'::JSONB
+		);
+		CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID
+		LANGUAGE sql STABLE AS 'SELECT NULL::UUID';`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := Migrate(db); err != nil {
@@ -36,5 +46,21 @@ func TestMigratePostgreSQL(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected profiles.role column, got %d", count)
+	}
+	var policyCount int64
+	if err := db.Raw(`SELECT COUNT(*) FROM pg_policies
+		WHERE schemaname='public' AND tablename IN ('profiles','blogs','events','galeri','signup_whitelist')`).Scan(&policyCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if policyCount < 8 {
+		t.Fatalf("expected security policies, got %d", policyCount)
+	}
+	var supportTableCount int64
+	if err := db.Raw(`SELECT COUNT(*) FROM information_schema.tables
+		WHERE table_schema='public' AND table_name IN ('signup_whitelist','site_visitors')`).Scan(&supportTableCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if supportTableCount != 2 {
+		t.Fatalf("expected support tables, got %d", supportTableCount)
 	}
 }

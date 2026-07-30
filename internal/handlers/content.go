@@ -23,7 +23,7 @@ func bind(c *gin.Context, target any) bool {
 	return true
 }
 func (h *Content) ListBlogs(c *gin.Context) {
-	v, e := h.Blogs.List(c, c.Query("published") == "true")
+	v, e := h.Blogs.List(c, true)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -31,6 +31,22 @@ func (h *Content) ListBlogs(c *gin.Context) {
 	response.OK(c, v)
 }
 func (h *Content) GetBlog(c *gin.Context) {
+	v, e := h.Blogs.GetPublic(c, c.Param("id"))
+	if e != nil {
+		response.Fail(c, e)
+		return
+	}
+	response.OK(c, v)
+}
+func (h *Content) ListAdminBlogs(c *gin.Context) {
+	v, e := h.Blogs.List(c, false)
+	if e != nil {
+		response.Fail(c, e)
+		return
+	}
+	response.OK(c, v)
+}
+func (h *Content) GetAdminBlog(c *gin.Context) {
 	v, e := h.Blogs.Get(c, c.Param("id"))
 	if e != nil {
 		response.Fail(c, e)
@@ -71,7 +87,7 @@ func (h *Content) DeleteBlog(c *gin.Context) {
 }
 
 func (h *Content) ListEvents(c *gin.Context) {
-	v, e := h.Events.List(c, c.Query("category"), c.Query("published") == "true")
+	v, e := h.Events.List(c, c.Query("category"), true)
 	if e != nil {
 		response.Fail(c, e)
 		return
@@ -79,6 +95,22 @@ func (h *Content) ListEvents(c *gin.Context) {
 	response.OK(c, v)
 }
 func (h *Content) GetEvent(c *gin.Context) {
+	v, e := h.Events.GetPublic(c, c.Param("id"))
+	if e != nil {
+		response.Fail(c, e)
+		return
+	}
+	response.OK(c, v)
+}
+func (h *Content) ListAdminEvents(c *gin.Context) {
+	v, e := h.Events.List(c, c.Query("category"), false)
+	if e != nil {
+		response.Fail(c, e)
+		return
+	}
+	response.OK(c, v)
+}
+func (h *Content) GetAdminEvent(c *gin.Context) {
 	v, e := h.Events.Get(c, c.Param("id"))
 	if e != nil {
 		response.Fail(c, e)

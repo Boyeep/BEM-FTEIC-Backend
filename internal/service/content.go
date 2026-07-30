@@ -44,6 +44,13 @@ func (s *BlogService) Get(ctx context.Context, id string) (*models.Blog, error) 
 	}
 	return v, nil
 }
+func (s *BlogService) GetPublic(ctx context.Context, id string) (*models.Blog, error) {
+	v, err := s.repo.FindPublished(ctx, id)
+	if err != nil {
+		return nil, serviceError(err, "blog")
+	}
+	return v, nil
+}
 func (s *BlogService) Create(ctx context.Context, in dto.CreateBlog, userID string) (*models.Blog, error) {
 	publishedAt := time.Now().UTC()
 	if in.PublishedAt != "" {
@@ -94,6 +101,13 @@ func (s *EventService) Get(ctx context.Context, id string) (*models.Event, error
 	}
 	return v, nil
 }
+func (s *EventService) GetPublic(ctx context.Context, id string) (*models.Event, error) {
+	v, err := s.repo.FindPublished(ctx, id)
+	if err != nil {
+		return nil, serviceError(err, "event")
+	}
+	return v, nil
+}
 func (s *EventService) Create(ctx context.Context, in dto.CreateEvent, userID string) (*models.Event, error) {
 	v := &models.Event{Title: in.Title, Description: in.Description, Author: in.Author, Category: in.Category, CoverImage: in.CoverImage, EventDate: in.EventDate, Status: in.Status, CreatedBy: &userID}
 	if err := s.repo.Create(ctx, v); err != nil {
@@ -137,7 +151,10 @@ func (s *GalleryService) Get(ctx context.Context, id string) (*models.Gallery, e
 	return v, nil
 }
 func (s *GalleryService) Create(ctx context.Context, in dto.CreateGallery, userID string) (*models.Gallery, error) {
-	v := &models.Gallery{Title: in.Title, Link: in.Link, ImageURL: in.ImageURL, TakenAt: in.TakenAt, CreatedBy: &userID}
+	if in.Category == "" {
+		in.Category = "all"
+	}
+	v := &models.Gallery{Title: in.Title, Link: in.Link, ImageURL: in.ImageURL, Category: in.Category, TakenAt: in.TakenAt, CreatedBy: &userID}
 	if err := s.repo.Create(ctx, v); err != nil {
 		return nil, serviceError(err, "gallery item")
 	}
@@ -148,7 +165,10 @@ func (s *GalleryService) Update(ctx context.Context, id string, in dto.UpdateGal
 	if err != nil {
 		return nil, err
 	}
-	v.Title, v.Link, v.ImageURL, v.TakenAt = in.Title, in.Link, in.ImageURL, in.TakenAt
+	if in.Category == "" {
+		in.Category = v.Category
+	}
+	v.Title, v.Link, v.ImageURL, v.Category, v.TakenAt = in.Title, in.Link, in.ImageURL, in.Category, in.TakenAt
 	if err := s.repo.Update(ctx, v); err != nil {
 		return nil, serviceError(err, "gallery item")
 	}

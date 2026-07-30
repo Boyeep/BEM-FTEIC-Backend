@@ -29,6 +29,7 @@ type CreateGallery struct {
 	Title    string `json:"title" binding:"required,max=200"`
 	Link     string `json:"link" binding:"required,url"`
 	ImageURL string `json:"image_url" binding:"omitempty,url"`
+	Category string `json:"category" binding:"omitempty,oneof=all teknik_elektro teknik_informatika sistem_informasi teknik_komputer teknik_biomedik teknologi_informasi"`
 	TakenAt  string `json:"taken_at" binding:"required,datetime=2006-01-02"`
 }
 
