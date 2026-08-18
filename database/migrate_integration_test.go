@@ -92,6 +92,36 @@ func TestMigratePostgreSQL(t *testing.T) {
 	if bemWhitelistCount != 1 {
 		t.Fatalf("expected BEM account in signup whitelist, got %d rows", bemWhitelistCount)
 	}
+	triggerAdminID := "77777777-7777-4777-8777-777777777777"
+	triggerAdminEmail := "trigger-admin@example.com"
+	if err := db.Exec("DELETE FROM auth.users WHERE id = ?", triggerAdminID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("DELETE FROM signup_whitelist WHERE email = ?", triggerAdminEmail).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Exec("DELETE FROM auth.users WHERE id = ?", triggerAdminID)
+		db.Exec("DELETE FROM signup_whitelist WHERE email = ?", triggerAdminEmail)
+	})
+	if err := db.Exec("INSERT INTO signup_whitelist (email) VALUES (?)", triggerAdminEmail).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO auth.users (id,email,raw_user_meta_data)
+		VALUES (?, ?, '{"username":"Trigger Admin"}'::JSONB)`,
+		triggerAdminID, triggerAdminEmail).Error; err != nil {
+		t.Fatal(err)
+	}
+	var triggerAdminRole string
+	if err := db.Raw(
+		"SELECT role FROM profiles WHERE id = ?",
+		triggerAdminID,
+	).Scan(&triggerAdminRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	if triggerAdminRole != "admin" {
+		t.Fatalf("expected whitelisted signup to become admin, got %q", triggerAdminRole)
+	}
 	testVerticalRepositories(t, db)
 	var count int64
 	if err := db.Raw(`SELECT COUNT(*) FROM information_schema.columns
@@ -146,12 +176,14 @@ func testVerticalRepositories(t *testing.T, db *gorm.DB) {
 	eventID := models.UUID("33333333-3333-4333-8333-333333333333")
 	draftEventID := models.UUID("33333333-3333-4333-8333-333333333334")
 	galleryID := models.UUID("44444444-4444-4444-8444-444444444444")
+	memberID := models.UUID("88888888-8888-4888-8888-888888888888")
 	whitelistEmail := "integration-whitelist@example.com"
 	cleanup := func() {
 		db.Exec(`DELETE FROM signup_whitelist WHERE email = ?`, whitelistEmail)
 		db.Exec(`DELETE FROM galeri WHERE id = ?`, galleryID)
 		db.Exec(`DELETE FROM events WHERE id IN (?, ?)`, eventID, draftEventID)
 		db.Exec(`DELETE FROM blogs WHERE id IN (?, ?)`, blogID, draftBlogID)
+		db.Exec(`DELETE FROM auth.users WHERE id = ?`, memberID)
 	}
 	cleanup()
 	t.Cleanup(cleanup)
@@ -165,6 +197,11 @@ func testVerticalRepositories(t *testing.T, db *gorm.DB) {
 		creator, "integration@example.com", "Integration Admin").Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Exec(`INSERT INTO auth.users (id,email,raw_user_meta_data)
+		VALUES (?, ?, '{"username":"Existing Member"}'::JSONB)`,
+		memberID, whitelistEmail).Error; err != nil {
+		t.Fatal(err)
+	}
 	accountRepo := repository.NewAccountRepository(db)
 	whitelistEntry := &models.WhitelistEntry{
 		Email:     whitelistEmail,
@@ -175,6 +212,23 @@ func testVerticalRepositories(t *testing.T, db *gorm.DB) {
 	}
 	if whitelistEntry.ID == "" || whitelistEntry.CreatedAt.IsZero() {
 		t.Fatalf("expected database-generated whitelist fields, got %#v", whitelistEntry)
+	}
+	var promotedRole string
+	if err := db.Raw("SELECT role FROM profiles WHERE id = ?", memberID).Scan(&promotedRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	if promotedRole != "admin" {
+		t.Fatalf("expected whitelisted member to be promoted, got %q", promotedRole)
+	}
+	if err := accountRepo.DeleteWhitelist(ctx, whitelistEntry.ID.String()); err != nil {
+		t.Fatal(err)
+	}
+	var revokedRole string
+	if err := db.Raw("SELECT role FROM profiles WHERE id = ?", memberID).Scan(&revokedRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	if revokedRole != "member" {
+		t.Fatalf("expected removed whitelist member to be revoked, got %q", revokedRole)
 	}
 
 	blogRepo := blog.NewRepository(db)

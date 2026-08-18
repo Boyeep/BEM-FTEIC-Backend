@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"repo-backend/internal/models"
@@ -28,8 +29,17 @@ func NewAccountRepository(db *gorm.DB) AccountRepository {
 }
 
 func (r *accountRepository) EnsureProfile(ctx context.Context, id, email, username string) error {
-	return r.db.WithContext(ctx).Exec(`INSERT INTO profiles (id,email,username,role)
-		VALUES (?,?,?,'member') ON CONFLICT (id) DO NOTHING`, id, email, username).Error
+	return r.db.WithContext(ctx).Exec(`
+		INSERT INTO profiles (id,email,username,role)
+		VALUES (?, ?, ?, CASE
+			WHEN EXISTS (
+				SELECT 1 FROM signup_whitelist
+				WHERE LOWER(BTRIM(email)) = LOWER(BTRIM(?))
+			) THEN 'admin'
+			ELSE 'member'
+		END)
+		ON CONFLICT (id) DO NOTHING
+	`, id, email, username, email).Error
 }
 
 func (r *accountRepository) FindProfile(ctx context.Context, id string) (*models.Profile, error) {
@@ -70,11 +80,20 @@ func (r *accountRepository) ListWhitelist(ctx context.Context) ([]models.Whiteli
 }
 
 func (r *accountRepository) CreateWhitelist(ctx context.Context, entry *models.WhitelistEntry) error {
-	err := r.db.WithContext(ctx).Raw(`
-		INSERT INTO signup_whitelist (email, created_by)
-		VALUES (?, ?)
-		RETURNING id, email, created_by, created_at
-	`, entry.Email, entry.CreatedBy).Scan(entry).Error
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Raw(`
+			INSERT INTO signup_whitelist (email, created_by)
+			VALUES (?, ?)
+			RETURNING id, email, created_by, created_at
+		`, entry.Email, entry.CreatedBy).Scan(entry).Error; err != nil {
+			return err
+		}
+		return tx.Exec(`
+			UPDATE profiles
+			SET role = 'admin', updated_at = NOW()
+			WHERE LOWER(BTRIM(email)) = LOWER(BTRIM(?))
+		`, entry.Email).Error
+	})
 	var postgresError *pgconn.PgError
 	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
 		return ErrConflict
@@ -83,12 +102,49 @@ func (r *accountRepository) CreateWhitelist(ctx context.Context, entry *models.W
 }
 
 func (r *accountRepository) DeleteWhitelist(ctx context.Context, id string) error {
-	result := r.db.WithContext(ctx).Exec("DELETE FROM signup_whitelist WHERE id = ?", id)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var entry models.WhitelistEntry
+		result := tx.Raw(`
+			SELECT id, email, created_by, created_at
+			FROM signup_whitelist
+			WHERE id = ?
+			FOR UPDATE
+		`, id).Scan(&entry)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrNotFound
+		}
+
+		var adminEmails []string
+		if err := tx.Raw(`
+			SELECT email FROM profiles
+			WHERE role = 'admin'
+			FOR UPDATE
+		`).Scan(&adminEmails).Error; err != nil {
+			return err
+		}
+		targetIsAdmin := false
+		otherAdminExists := false
+		for _, adminEmail := range adminEmails {
+			if strings.EqualFold(strings.TrimSpace(adminEmail), strings.TrimSpace(entry.Email)) {
+				targetIsAdmin = true
+			} else {
+				otherAdminExists = true
+			}
+		}
+		if targetIsAdmin && !otherAdminExists {
+			return ErrLastAdmin
+		}
+
+		if err := tx.Exec("DELETE FROM signup_whitelist WHERE id = ?", id).Error; err != nil {
+			return err
+		}
+		return tx.Exec(`
+			UPDATE profiles
+			SET role = 'member', updated_at = NOW()
+			WHERE LOWER(BTRIM(email)) = LOWER(BTRIM(?))
+		`, entry.Email).Error
+	})
 }
