@@ -49,6 +49,13 @@ func TestMigratePostgreSQL(t *testing.T) {
 		SET email=EXCLUDED.email, raw_user_meta_data=EXCLUDED.raw_user_meta_data`).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Exec(`INSERT INTO auth.users (id,email,raw_user_meta_data)
+		VALUES ('66666666-6666-4666-8666-666666666666', 'website.fteic@gmail.com',
+			'{"username":"BEM Admin"}'::JSONB)
+		ON CONFLICT (id) DO UPDATE
+		SET email=EXCLUDED.email, raw_user_meta_data=EXCLUDED.raw_user_meta_data`).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := Migrate(db); err != nil {
 		t.Fatal(err)
 	}
@@ -64,6 +71,26 @@ func TestMigratePostgreSQL(t *testing.T) {
 	}
 	if ownerRole != "admin" {
 		t.Fatalf("expected bootstrapped owner to be admin, got %q", ownerRole)
+	}
+	var bemAdminRole string
+	if err := db.Raw(
+		"SELECT role FROM profiles WHERE email = ?",
+		"website.fteic@gmail.com",
+	).Scan(&bemAdminRole).Error; err != nil {
+		t.Fatal(err)
+	}
+	if bemAdminRole != "admin" {
+		t.Fatalf("expected BEM account to be admin, got %q", bemAdminRole)
+	}
+	var bemWhitelistCount int64
+	if err := db.Raw(
+		"SELECT COUNT(*) FROM signup_whitelist WHERE email = ?",
+		"website.fteic@gmail.com",
+	).Scan(&bemWhitelistCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if bemWhitelistCount != 1 {
+		t.Fatalf("expected BEM account in signup whitelist, got %d rows", bemWhitelistCount)
 	}
 	testVerticalRepositories(t, db)
 	var count int64
@@ -119,7 +146,9 @@ func testVerticalRepositories(t *testing.T, db *gorm.DB) {
 	eventID := models.UUID("33333333-3333-4333-8333-333333333333")
 	draftEventID := models.UUID("33333333-3333-4333-8333-333333333334")
 	galleryID := models.UUID("44444444-4444-4444-8444-444444444444")
+	whitelistEmail := "integration-whitelist@example.com"
 	cleanup := func() {
+		db.Exec(`DELETE FROM signup_whitelist WHERE email = ?`, whitelistEmail)
 		db.Exec(`DELETE FROM galeri WHERE id = ?`, galleryID)
 		db.Exec(`DELETE FROM events WHERE id IN (?, ?)`, eventID, draftEventID)
 		db.Exec(`DELETE FROM blogs WHERE id IN (?, ?)`, blogID, draftBlogID)
@@ -135,6 +164,17 @@ func testVerticalRepositories(t *testing.T, db *gorm.DB) {
 		ON CONFLICT (id) DO UPDATE SET username=EXCLUDED.username`,
 		creator, "integration@example.com", "Integration Admin").Error; err != nil {
 		t.Fatal(err)
+	}
+	accountRepo := repository.NewAccountRepository(db)
+	whitelistEntry := &models.WhitelistEntry{
+		Email:     whitelistEmail,
+		CreatedBy: &creator,
+	}
+	if err := accountRepo.CreateWhitelist(ctx, whitelistEntry); err != nil {
+		t.Fatal(err)
+	}
+	if whitelistEntry.ID == "" || whitelistEntry.CreatedAt.IsZero() {
+		t.Fatalf("expected database-generated whitelist fields, got %#v", whitelistEntry)
 	}
 
 	blogRepo := blog.NewRepository(db)
