@@ -70,7 +70,11 @@ func (r *accountRepository) ListWhitelist(ctx context.Context) ([]models.Whiteli
 }
 
 func (r *accountRepository) CreateWhitelist(ctx context.Context, entry *models.WhitelistEntry) error {
-	err := r.db.WithContext(ctx).Table("signup_whitelist").Create(entry).Error
+	err := r.db.WithContext(ctx).Raw(`
+		INSERT INTO signup_whitelist (email, created_by)
+		VALUES (?, ?)
+		RETURNING id, email, created_by, created_at
+	`, entry.Email, entry.CreatedBy).Scan(entry).Error
 	var postgresError *pgconn.PgError
 	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
 		return ErrConflict
