@@ -28,11 +28,16 @@ func TestMigratePostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec(`DO $$ BEGIN
+	if err := db.Exec(`
+		DROP SCHEMA IF EXISTS public CASCADE;
+		CREATE SCHEMA public;
+		DROP SCHEMA IF EXISTS auth CASCADE;
+		CREATE SCHEMA auth;
+		CREATE EXTENSION IF NOT EXISTS pgcrypto;
+		DO $$ BEGIN
 			IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon; END IF;
 			IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated; END IF;
-		END $$;
-		CREATE SCHEMA IF NOT EXISTS auth;
+			END $$;
 		CREATE TABLE IF NOT EXISTS auth.users (
 			id UUID PRIMARY KEY,
 			email TEXT,
@@ -40,6 +45,27 @@ func TestMigratePostgreSQL(t *testing.T) {
 		);
 		CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID
 		LANGUAGE sql STABLE AS 'SELECT NULL::UUID';`).Error; err != nil {
+		t.Fatal(err)
+	}
+	// Reproduce the legacy production shape: the tables already exist, so the
+	// CREATE TABLE IF NOT EXISTS migrations cannot retrofit missing uniqueness.
+	if err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS profiles (
+			id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+			email TEXT NOT NULL,
+			username TEXT NOT NULL,
+			avatar_url TEXT,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE TABLE IF NOT EXISTS signup_whitelist (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			email TEXT NOT NULL,
+			created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		INSERT INTO signup_whitelist (email)
+		VALUES (' WEBSITE.FTEIC@GMAIL.COM '), ('website.fteic@gmail.com');
+	`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO auth.users (id,email,raw_user_meta_data)
