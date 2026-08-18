@@ -92,6 +92,13 @@ func (s *AccountService) AddWhitelist(ctx context.Context, email, creator string
 
 func (s *AccountService) DeleteWhitelist(ctx context.Context, id string) error {
 	if err := s.repo.DeleteWhitelist(ctx, id); err != nil {
+		if errors.Is(err, repository.ErrLastAdmin) {
+			return apperr.New(
+				"LAST_ADMIN",
+				"admin terakhir tidak dapat dihapus dari whitelist",
+				http.StatusConflict,
+			)
+		}
 		return serviceError(err, "whitelist entry")
 	}
 	return nil

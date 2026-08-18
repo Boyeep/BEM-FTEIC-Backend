@@ -7,6 +7,7 @@ import (
 
 	"repo-backend/internal/models"
 	"repo-backend/internal/repository"
+	"repo-backend/pkg/apperr"
 )
 
 type accountRepositoryStub struct {
@@ -63,5 +64,14 @@ func TestAccountDeleteWhitelistMapsNotFound(t *testing.T) {
 	repo := &accountRepositoryStub{deleteErr: repository.ErrNotFound}
 	if err := NewAccount(repo).DeleteWhitelist(context.Background(), "missing"); err == nil {
 		t.Fatal("expected not found error")
+	}
+}
+
+func TestAccountDeleteWhitelistProtectsLastAdmin(t *testing.T) {
+	repo := &accountRepositoryStub{deleteErr: repository.ErrLastAdmin}
+	err := NewAccount(repo).DeleteWhitelist(context.Background(), "last-admin")
+	appError := apperr.As(err)
+	if appError.Code != "LAST_ADMIN" || appError.HTTPStatus != 409 {
+		t.Fatalf("expected LAST_ADMIN conflict, got %#v", appError)
 	}
 }
